@@ -1,0 +1,95 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Arunprasath Vairapalayam Rajendran"
+date: "Sunday, December 21, 2014"
+output: html_document
+---
+
+#Introduction  
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+#Objective  
+The goal of this project is to predict the manner in which they did the exercise. This report describes how the model was built, how cross validation was performed, estimate of the expected out of sample error and the reasoning behind the choices.  
+
+#Data Processing and setup  
+##Loading packages  
+
+```{r}
+library(Hmisc)
+library(caret)
+library(randomForest)
+set.seed(360127)
+```
+
+##Getting data
+
+```{r}
+#download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv', "train.csv")
+#download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv', "test.csv")
+
+training.df <- read.csv("train.csv", na.strings=c("NA","#DIV/0!", ""))
+training.df <- training.df[,colSums(is.na(training.df)) == 0]
+training.df <- training.df[,-c(1:7)]
+
+test.df <- read.csv("test.csv" , na.strings=c("NA", "#DIV/0!", ""))
+test.df <- test.df[,colSums(is.na(test.df)) == 0]
+test.df <- test.df[,-c(1:7)]
+```
+
+##Creating the training and test sets  
+
+```{r}
+inTrain <- createDataPartition(training.df$classe, p = 0.6, list = FALSE)
+training.data <- training.df[inTrain, ]
+test.data  <- training.df[-inTrain, ]
+
+y <- training.data$classe
+x <- training.data[-ncol(training.data)]
+```
+
+##Building a prediction model using random forest
+We now proceed to build a prediction model using random forests. I have built the model setting the no. of trees to 600. This number was chosen to be sufficiently large. I could study the OOB error rates against no. of trees to determine optimal no. of trees, but since there is no performance bottleneck, I have retained no. of trees at 600. OOB estimate of  error rate at 600 trees is 0.67%.
+
+```{r}
+model.rf <- randomForest(x, y, ntree=600)
+```
+
+##Testing the accuracy and cross-validation of the prediction model
+```{r}
+train.pred <- predict(model.rf, newdata=training.data)
+confusionMatrix(train.pred,training.data$classe)
+
+test.pred <- predict(model.rf, newdata=test.data)
+confusionMatrix(test.pred,test.data$classe)
+```
+
+The model has an accuracy of 1 on the training set and an accuracy of 0.9934 (95% CI - (0.9913, 0.995)) on the test set.
+
+
+###Note on cross-validation  
+Source: [link](http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr)  
+*"In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the run..."*
+
+
+###Expectation of out of sample error  
+Out of sample error is the error rate you get on new data set. So, based on the above results, the estimation of out of sample error rate is 0.0066 (1-0.9934).
+
+
+##Submission Script
+The following script is copied from the instructions provided in the submission page to create the requisite files for submission. The answers data frame contains the predictions for the 20 observations in the evaluation dataset.
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+cols <- colnames(training.df[colSums(is.na(training.df)) == 0])[-(1:7)]
+answer.data <- test.data[cols[cols!='classe']]
+answers <- predict(model.rf, newdata=test.df)
+
+pml_write_files(answers)
+```
